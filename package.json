@@ -1,0 +1,31 @@
+{
+  "name": "dns-sd.js",
+  "version": "0.0.1",
+  "homepage": "https://github.com/justindarc/dns-sd.js",
+  "license": "MIT",
+  "main": "dist/dns-sd.js",
+  "directories": {
+    "example": "examples",
+    "test": "test"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "browserify": "^7.0.0",
+    "karma": "^0.12.28",
+    "karma-firefox-launcher": "^0.1.3",
+    "karma-mocha": "^0.1.10",
+    "karma-sinon-chai": "^0.2.0"
+  },
+  "scripts": {
+    "test": "./node_modules/karma/bin/karma start test/karma.conf.js --single-run",
+    "build": "mkdir -p dist && ./node_modules/.bin/browserify src/dns-sd.js --outfile dist/dns-sd.js --standalone DNSSD && mkdir -p example/browser/lib && cp -rf dist/dns-sd.js example/browser/lib/dns-sd.js && mkdir -p example/chat/lib && cp -rf dist/dns-sd.js example/chat/lib/dns-sd.js",
+    "clean": "rm -rf dist/dns-sd.js && rm -rf example/browser/lib/dns-sd.js && rm -rf example/chat/lib/dns-sd.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/justindarc/dns-sd.js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/justindarc/dns-sd.js/issues"
+  }
+}
