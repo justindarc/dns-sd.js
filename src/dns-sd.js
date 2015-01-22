@@ -4,7 +4,7 @@
 
 module.exports = window.DNSSD = (function() {
 
-var DNSQuestionRecord = require('./dns-question-record');
+var DNSRecord         = require('./dns-record');
 var DNSResourceRecord = require('./dns-resource-record');
 var DNSPacket         = require('./dns-packet');
 var DNSCodes          = require('./dns-codes');
@@ -33,7 +33,7 @@ DNSSD.getSocket = function() {
       });
 
       this.socket.onmessage = (message) => {
-        var packet = new DNSPacket(message.data);
+        var packet = new DNSPacket(new ByteArray(message.data));
 
         switch (packet.flags.QR) {
           case DNSCodes.QUERY_RESPONSE_CODES.QUERY:
@@ -112,7 +112,7 @@ function handleResponsePacket(packet, message) {
   var services = [];
   packet.getRecords('AN').forEach((record) => {
     if (record.recordType === DNSCodes.RECORD_TYPES.PTR) {
-      services.push(record.getName());
+      services.push(record.data);
     }
   });
 
@@ -129,7 +129,11 @@ function discover() {
 
   packet.flags.QR = DNSCodes.QUERY_RESPONSE_CODES.QUERY;
 
-  var question = new DNSQuestionRecord(DNSSD_SERVICE_NAME, DNSCodes.RECORD_TYPES.PTR);
+  var question = new DNSRecord({
+    name: DNSSD_SERVICE_NAME,
+    recordType: DNSCodes.RECORD_TYPES.PTR
+  });
+
   packet.addRecord('QD', question);
 
   this.getSocket().then((socket) => {
@@ -172,34 +176,51 @@ function addServiceToPacket(serviceName, packet) {
   var alias = serviceName;
 
   // SRV Record
-  // var srv = new DNSResourceRecord(alias, DNSCodes.RECORD_TYPES.SRV);
   // var srvData = new ByteArray();
   // srvData.push(0x0000, 2);        // Priority
   // srvData.push(0x0000, 2);        // Weight
   // srvData.push(service.port, 2);  // Port
-  // srvData.append(DNSUtils.nameToByteArray(serviceName));
-  // srv.data = srvData;
+  // srvData.append(DNSUtils.labelToByteArray(serviceName));
+
+  // var srv = new DNSResourceRecord({
+  //   name: alias,
+  //   recordType: DNSCodes.RECORD_TYPES.SR,
+  //   data: srvData
+  // });
+
   // packet.addRecord('AR', srv);
 
   // TXT Record
-  // var txt = new DNSResourceRecord(alias, DNSCodes.RECORD_TYPES.TXT);
   // var txtData = new ByteArray();
 
   // for (var key in service.options) {
-  //   txtData.append(DNSUtils.nameToByteArray(key + '=' + service.options[key]));
+  //   txtData.append(DNSUtils.labelToByteArray(key + '=' + service.options[key]));
   // }
+  
+  // var txt = new DNSResourceRecord({
+  //   name: alias,
+  //   recordType: DNSCodes.RECORD_TYPES.TXT,
+  //   data: txtData
+  // });
 
-  // txt.data = txtData;
   // packet.addRecord('AR', txt);
 
   // PTR Wildcard Record
-  var ptrWildcard = new DNSResourceRecord(DNSSD_SERVICE_NAME, DNSCodes.RECORD_TYPES.PTR);
-  ptrWildcard.data = DNSUtils.nameToByteArray(serviceName);
+  var ptrWildcard = new DNSResourceRecord({
+    name: DNSSD_SERVICE_NAME,
+    recordType: DNSCodes.RECORD_TYPES.PTR,
+    data: serviceName
+  });
+
   packet.addRecord('AN', ptrWildcard);
 
   // PTR Service Record
-  var ptrService = new DNSResourceRecord(serviceName, DNSCodes.RECORD_TYPES.PTR);
-  ptrService.data = DNSUtils.nameToByteArray(alias);
+  var ptrService = new DNSResourceRecord({
+    name: serviceName,
+    recordType: DNSCodes.RECORD_TYPES.PTR,
+    data: alias
+  });
+
   packet.addRecord('AN', ptrService);
 }
 

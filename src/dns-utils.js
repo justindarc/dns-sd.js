@@ -5,41 +5,51 @@
 module.exports = window.DNSUtils = (function() {
 
 var ByteArray   = require('./byte-array');
-var BinaryUtils = require('./binary-utils');
 
 var DNSUtils = {
-  byteArrayToName: function(byteArrayOrReader) {
-    var byteArray;
-    var reader;
+  decompressLabel: function(label, byteArray) {
+    var result = '';
 
-    if (byteArrayOrReader instanceof ByteArray) {
-      byteArray = byteArrayOrReader;
-      reader = byteArray.getReader();
-    }
-
-    else {
-      reader = byteArrayOrReader;
-      byteArray = reader.byteArray;
-    }
-
-    var parts = [];
-    var partLength;
-    while (partLength = reader.getValue()) {
-      // TODO: Handle case where we have a pointer to the name
-      if (partLength === 0xc0) {
-        reader.getValue();
-        break;
+    for (var i = 0, length = label.length; i < length; i++) {
+      if (label.charCodeAt(i) !== 0xc0) {
+        result += label.charAt(i);
+        continue;
       }
 
-      parts.push(BinaryUtils.arrayBufferToString(reader.getBytes(partLength)));
+      i++;
+      result += this.decompressLabel(this.byteArrayToLabel(byteArray, label.charCodeAt(i)), byteArray);
+    }
+
+    return result;
+  },
+
+  byteArrayReaderToLabel: function(byteArrayReader) {
+    var parts = [];
+    var partLength;
+
+    while ((partLength = byteArrayReader.getValue())) {
+      // If a length has been specified instead of a pointer,
+      // read the string of the specified length.
+      if (partLength !== 0xc0) {
+        parts.push(byteArrayReader.getString(partLength));
+        continue;
+      }
+
+      // TODO: Handle case where we have a pointer to the label
+      parts.push(String.fromCharCode(0xc0) + byteArrayReader.getString());
+      break;
     }
 
     return parts.join('.');
   },
 
-  nameToByteArray: function(name) {
+  byteArrayToLabel: function(byteArray, startByte) {
+    return this.byteArrayReaderToLabel(byteArray.getReader(startByte));
+  },
+
+  labelToByteArray: function(label) {
     var byteArray = new ByteArray();
-    var parts = name.split('.');
+    var parts = label.split('.');
     parts.forEach((part) => {
       var length = part.length;
       byteArray.push(length);
@@ -48,8 +58,6 @@ var DNSUtils = {
         byteArray.push(part.charCodeAt(i));
       }
     });
-
-    byteArray.push(0x00);
 
     return byteArray;
   },
@@ -104,7 +112,6 @@ var DNSUtils = {
 
     return value;
   }
-
 };
 
 return DNSUtils;

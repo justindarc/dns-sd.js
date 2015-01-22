@@ -4,7 +4,7 @@
 
 module.exports = window.DNSPacket = (function() {
 
-var DNSQuestionRecord = require('./dns-question-record');
+var DNSRecord         = require('./dns-record');
 var DNSResourceRecord = require('./dns-resource-record');
 var DNSUtils          = require('./dns-utils');
 
@@ -109,7 +109,7 @@ const DNS_PACKET_RECORD_SECTION_TYPES = [
  * DATALEN:   2-Bytes
  * DATA:      ??-Bytes (Specified By DATALEN)
  */
-function DNSPacket(arrayBuffer) {
+function DNSPacket(byteArray) {
   this.flags = DNSUtils.valueToFlags(0x0000);
   this.records = {};
 
@@ -117,11 +117,10 @@ function DNSPacket(arrayBuffer) {
     this.records[recordSectionType] = [];
   });
 
-  if (!arrayBuffer) {
+  if (!byteArray) {
     return this;
   }
 
-  var byteArray = new ByteArray(arrayBuffer);
   var reader = byteArray.getReader();
 
   if (reader.getValue(2) !== 0x0000) {
@@ -139,33 +138,22 @@ function DNSPacket(arrayBuffer) {
 
   // Parse the actual records.
   DNSPacket.RECORD_SECTION_TYPES.forEach((recordSectionType) => {
-    var count = recordCounts[recordSectionType];
-    var name;
-
-    for (var i = 0; i < count; i++) {
-      name = DNSUtils.byteArrayToName(reader);// || name;
+    iterate(recordCounts[recordSectionType], () => {
+      var record;
 
       if (recordSectionType === 'QD') {
-        this.addRecord(recordSectionType, new DNSQuestionRecord(
-          name,               // Name
-          reader.getValue(2), // Type
-          reader.getValue(2)  // Class
-        ));
+        record = DNSRecord.parseFromPacketReader(reader);
+        this.addRecord(recordSectionType, record);
       }
 
       else {
-        this.addRecord(recordSectionType, new DNSResourceRecord(
-          name,                               // Name
-          reader.getValue(2),                 // Type
-          reader.getValue(2),                 // Class
-          reader.getValue(4),                 // TTL
-          reader.getBytes(reader.getValue(2)) // Data
-        ));
+        record = DNSResourceRecord.parseFromPacketReader(reader);
+        this.addRecord(recordSectionType, record);
       }
-    }
+    });
   });
 
-  if (!reader.isEOF()) {
+  if (!reader.eof) {
     console.warn('Did not complete parsing packet data');
   }
 }
@@ -175,6 +163,7 @@ DNSPacket.RECORD_SECTION_TYPES = DNS_PACKET_RECORD_SECTION_TYPES;
 DNSPacket.prototype.constructor = DNSPacket;
 
 DNSPacket.prototype.addRecord = function(recordSectionType, record) {
+  record.packet = this;
   this.records[recordSectionType].push(record);
 };
 
@@ -185,42 +174,32 @@ DNSPacket.prototype.getRecords = function(recordSectionType) {
 DNSPacket.prototype.serialize = function() {
   var byteArray = new ByteArray();
 
+  // Write leading 0x0000 (2 bytes)
   byteArray.push(0x0000, 2);
+
+  // Write `flags` (2 bytes)
   byteArray.push(DNSUtils.flagsToValue(this.flags), 2);
 
+  // Write lengths of record sections (2 bytes each)
   DNSPacket.RECORD_SECTION_TYPES.forEach((recordSectionType) => {
     byteArray.push(this.records[recordSectionType].length, 2);
   });
 
+  // Write records
   DNSPacket.RECORD_SECTION_TYPES.forEach((recordSectionType) => {
     this.records[recordSectionType].forEach((record) => {
-      byteArray.append(DNSUtils.nameToByteArray(record.name));
-      byteArray.push(record.recordType, 2);
-      byteArray.push(record.classCode, 2);
-
-      // No more data to serialize if this is a question record.
-      if (recordSectionType === 'QD') {
-        return;
-      }
-
-      byteArray.push(record.ttl, 4);
-
-      var data = record.data;
-      if (data instanceof ByteArray) {
-        data = new Uint8Array(data.buffer);
-      }
-
-      if (data instanceof ArrayBuffer) {
-        data = new Uint8Array(data);
-      }
-
-      byteArray.push(data.length, 2);
-      byteArray.append(data);
+      byteArray.append(record.serialize());
     });
   });
 
   return byteArray.buffer;
 };
+
+function iterate(count, iterator) {
+  for (var i = 0; i < count; i++) {
+    iterator(i);
+  }
+}
 
 return DNSPacket;
 

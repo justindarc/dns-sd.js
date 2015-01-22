@@ -41,7 +41,7 @@ var BinaryUtils = {
   },
 
   mergeArrayBuffers: function(arrayBuffers, callback) {
-    return BinaryUtils.blobToArrayBuffer(new Blob(arrayBuffers), callback);
+    return this.blobToArrayBuffer(new Blob(arrayBuffers), callback);
   }
 };
 
@@ -56,7 +56,13 @@ return BinaryUtils;
 
 module.exports = window.ByteArray = (function() {
 
+var BinaryUtils = require('./binary-utils');
+
 function ByteArray(maxBytesOrData) {
+  if (maxBytesOrData instanceof ByteArray) {
+    maxBytesOrData = maxBytesOrData.buffer;
+  }
+
   if (maxBytesOrData instanceof Uint8Array ||
       maxBytesOrData instanceof ArrayBuffer) {
     this._data = new Uint8Array(maxBytesOrData);
@@ -72,7 +78,7 @@ function ByteArray(maxBytesOrData) {
 
 ByteArray.prototype.constructor = ByteArray;
 
-Object.defineProperty(ByteArray.prototype, 'byteLength', {
+Object.defineProperty(ByteArray.prototype, 'length', {
   get: function() {
     return this._cursor;
   }
@@ -84,68 +90,79 @@ Object.defineProperty(ByteArray.prototype, 'buffer', {
   }
 });
 
-ByteArray.prototype.push = function(value, byteLength) {
-  byteLength = byteLength || 1;
+ByteArray.prototype.push = function(value, length) {
+  length = length || 1;
 
-  this.append(valueToUint8Array(value, byteLength));
+  this.append(valueToUint8Array(value, length));
 };
 
-ByteArray.prototype.append = function(bytes) {
-  if (bytes instanceof ByteArray) {
-    bytes = bytes.buffer;
+ByteArray.prototype.append = function(data) {
+  // Get `data` as a `Uint8Array`
+  if (data instanceof ByteArray) {
+    data = data.buffer;
   }
 
-  if (bytes instanceof ArrayBuffer) {
-    bytes = new Uint8Array(bytes);
+  if (data instanceof ArrayBuffer) {
+    data = new Uint8Array(data);
   }
 
-  for (var i = 0, byteLength = bytes.length; i < byteLength; i++) {
-    this._data[this._cursor] = bytes[i];
+  for (var i = 0, length = data.length; i < length; i++) {
+    this._data[this._cursor] = data[i];
     this._cursor++;
   }
 };
 
 ByteArray.prototype.getReader = function(startByte) {
-  var cursor = startByte || 0;
+  return new ByteArrayReader(this, startByte);
+};
 
-  var getBytes = (byteLength) => {
-    if (byteLength === null) {
-      return new Uint8Array();
-    }
+function ByteArrayReader(byteArray, startByte) {
+  this.byteArray = byteArray;
+  this.cursor = startByte || 0;
+}
 
-    byteLength = byteLength || 1;
+ByteArrayReader.prototype.constructor = ByteArrayReader;
 
-    var endPointer = cursor + byteLength;
-    if (endPointer > this.byteLength) {
-      return new Uint8Array();
-    }
+Object.defineProperty(ByteArrayReader.prototype, 'eof', {
+  get: function() {
+    return this.cursor >= this.byteArray.length;
+  }
+});
 
-    var uint8Array = new Uint8Array(this._buffer.slice(cursor, endPointer));
-    cursor += byteLength;
+ByteArrayReader.prototype.getBytes = function(length) {
+  if (length === null || length === 0) {
+    return new Uint8Array();
+  }
 
-    return uint8Array;
-  };
+  length = length || 1;
 
-  var getValue = (byteLength) => {
-    var bytes = getBytes(byteLength);
-    if (bytes.length === 0) {
-      return null;
-    }
+  var end = this.cursor + length;
+  if (end > this.byteArray.length) {
+    return new Uint8Array();
+  }
 
-    return uint8ArrayToValue(bytes);
-  };
+  var uint8Array = new Uint8Array(this.byteArray._buffer.slice(this.cursor, end));
+  this.cursor += length;
 
-  var isEOF = () => {
-    return cursor >= this.byteLength;
-  };
+  return new ByteArray(uint8Array);
+};
 
-  return {
-    getBytes:  getBytes,
-    getValue:  getValue,
-    isEOF:     isEOF,
+ByteArrayReader.prototype.getString = function(length) {
+  var byteArray = this.getBytes(length);
+  if (byteArray.length === 0) {
+    return '';
+  }
 
-    byteArray: this
-  };
+  return BinaryUtils.arrayBufferToString(byteArray.buffer);
+};
+
+ByteArrayReader.prototype.getValue = function(length) {
+  var byteArray = this.getBytes(length);
+  if (byteArray.length === 0) {
+    return null;
+  }
+
+  return uint8ArrayToValue(new Uint8Array(byteArray.buffer));
 };
 
 /**
@@ -163,10 +180,10 @@ ByteArray.prototype.getReader = function(startByte) {
  *  Offset     0        255       65535    16777215
  *  Total    255      65535    16777215  4294967295
  */
-function valueToUint8Array(value, byteLength) {
-  var arrayBuffer = new ArrayBuffer(byteLength);
+function valueToUint8Array(value, length) {
+  var arrayBuffer = new ArrayBuffer(length);
   var uint8Array = new Uint8Array(arrayBuffer);
-  for (var i = byteLength - 1; i >= 0; i--) {
+  for (var i = length - 1; i >= 0; i--) {
     uint8Array[i] = value & 0xff;
     value = value >> 8;
   }
@@ -175,13 +192,13 @@ function valueToUint8Array(value, byteLength) {
 }
 
 function uint8ArrayToValue(uint8Array) {
-  var byteLength = uint8Array.length;
-  if (byteLength === 0) {
+  var length = uint8Array.length;
+  if (length === 0) {
     return null;
   }
 
   var value = 0;
-  for (var i = 0; i < byteLength; i++) {
+  for (var i = 0; i < length; i++) {
     value = value << 8;
     value += uint8Array[i];
   }
@@ -193,7 +210,7 @@ return ByteArray;
 
 })();
 
-},{}],3:[function(require,module,exports){
+},{"./binary-utils":1}],3:[function(require,module,exports){
 /*jshint esnext:true*/
 /*exported DNSCodes*/
 'use strict';
@@ -385,7 +402,7 @@ return DNSCodes;
 
 module.exports = window.DNSPacket = (function() {
 
-var DNSQuestionRecord = require('./dns-question-record');
+var DNSRecord         = require('./dns-record');
 var DNSResourceRecord = require('./dns-resource-record');
 var DNSUtils          = require('./dns-utils');
 
@@ -490,7 +507,7 @@ const DNS_PACKET_RECORD_SECTION_TYPES = [
  * DATALEN:   2-Bytes
  * DATA:      ??-Bytes (Specified By DATALEN)
  */
-function DNSPacket(arrayBuffer) {
+function DNSPacket(byteArray) {
   this.flags = DNSUtils.valueToFlags(0x0000);
   this.records = {};
 
@@ -498,11 +515,10 @@ function DNSPacket(arrayBuffer) {
     this.records[recordSectionType] = [];
   });
 
-  if (!arrayBuffer) {
+  if (!byteArray) {
     return this;
   }
 
-  var byteArray = new ByteArray(arrayBuffer);
   var reader = byteArray.getReader();
 
   if (reader.getValue(2) !== 0x0000) {
@@ -520,33 +536,22 @@ function DNSPacket(arrayBuffer) {
 
   // Parse the actual records.
   DNSPacket.RECORD_SECTION_TYPES.forEach((recordSectionType) => {
-    var count = recordCounts[recordSectionType];
-    var name;
-
-    for (var i = 0; i < count; i++) {
-      name = DNSUtils.byteArrayToName(reader);// || name;
+    iterate(recordCounts[recordSectionType], () => {
+      var record;
 
       if (recordSectionType === 'QD') {
-        this.addRecord(recordSectionType, new DNSQuestionRecord(
-          name,               // Name
-          reader.getValue(2), // Type
-          reader.getValue(2)  // Class
-        ));
+        record = DNSRecord.parseFromPacketReader(reader);
+        this.addRecord(recordSectionType, record);
       }
 
       else {
-        this.addRecord(recordSectionType, new DNSResourceRecord(
-          name,                               // Name
-          reader.getValue(2),                 // Type
-          reader.getValue(2),                 // Class
-          reader.getValue(4),                 // TTL
-          reader.getBytes(reader.getValue(2)) // Data
-        ));
+        record = DNSResourceRecord.parseFromPacketReader(reader);
+        this.addRecord(recordSectionType, record);
       }
-    }
+    });
   });
 
-  if (!reader.isEOF()) {
+  if (!reader.eof) {
     console.warn('Did not complete parsing packet data');
   }
 }
@@ -556,6 +561,7 @@ DNSPacket.RECORD_SECTION_TYPES = DNS_PACKET_RECORD_SECTION_TYPES;
 DNSPacket.prototype.constructor = DNSPacket;
 
 DNSPacket.prototype.addRecord = function(recordSectionType, record) {
+  record.packet = this;
   this.records[recordSectionType].push(record);
 };
 
@@ -566,93 +572,96 @@ DNSPacket.prototype.getRecords = function(recordSectionType) {
 DNSPacket.prototype.serialize = function() {
   var byteArray = new ByteArray();
 
+  // Write leading 0x0000 (2 bytes)
   byteArray.push(0x0000, 2);
+
+  // Write `flags` (2 bytes)
   byteArray.push(DNSUtils.flagsToValue(this.flags), 2);
 
+  // Write lengths of record sections (2 bytes each)
   DNSPacket.RECORD_SECTION_TYPES.forEach((recordSectionType) => {
     byteArray.push(this.records[recordSectionType].length, 2);
   });
 
+  // Write records
   DNSPacket.RECORD_SECTION_TYPES.forEach((recordSectionType) => {
     this.records[recordSectionType].forEach((record) => {
-      byteArray.append(DNSUtils.nameToByteArray(record.name));
-      byteArray.push(record.recordType, 2);
-      byteArray.push(record.classCode, 2);
-
-      // No more data to serialize if this is a question record.
-      if (recordSectionType === 'QD') {
-        return;
-      }
-
-      byteArray.push(record.ttl, 4);
-
-      var data = record.data;
-      if (data instanceof ByteArray) {
-        data = new Uint8Array(data.buffer);
-      }
-
-      if (data instanceof ArrayBuffer) {
-        data = new Uint8Array(data);
-      }
-
-      byteArray.push(data.length, 2);
-      byteArray.append(data);
+      byteArray.append(record.serialize());
     });
   });
 
   return byteArray.buffer;
 };
 
+function iterate(count, iterator) {
+  for (var i = 0; i < count; i++) {
+    iterator(i);
+  }
+}
+
 return DNSPacket;
 
 })();
 
-},{"./byte-array":2,"./dns-question-record":5,"./dns-resource-record":7,"./dns-utils":9}],5:[function(require,module,exports){
-/*jshint esnext:true*/
-/*exported DNSQuestionRecord*/
-'use strict';
-
-module.exports = window.DNSQuestionRecord = (function() {
-
-var DNSRecord = require('./dns-record');
-var DNSCodes  = require('./dns-codes');
-
-function DNSQuestionRecord(name, recordType, classCode) {
-  this.name = name;
-  this.recordType = recordType;
-  this.classCode = classCode || DNSCodes.CLASS_CODES.IN;
-}
-
-DNSQuestionRecord.prototype = Object.create(DNSRecord.prototype);
-
-DNSQuestionRecord.prototype.constructor = DNSQuestionRecord;
-
-return DNSQuestionRecord;
-
-})();
-
-},{"./dns-codes":3,"./dns-record":6}],6:[function(require,module,exports){
+},{"./byte-array":2,"./dns-record":5,"./dns-resource-record":6,"./dns-utils":8}],5:[function(require,module,exports){
 /*jshint esnext:true*/
 /*exported DNSRecord*/
 'use strict';
 
 module.exports = window.DNSRecord = (function() {
 
-var DNSCodes = require('./dns-codes');
+var DNSCodes  = require('./dns-codes');
+var DNSUtils  = require('./dns-utils');
 
-function DNSRecord(name, recordType, classCode) {
-  this.name = name;
-  this.recordType = recordType;
-  this.classCode = classCode || DNSCodes.CLASS_CODES.IN;
+var ByteArray = require('./byte-array');
+
+function DNSRecord(properties) {
+  if (properties) {
+    for (var property in properties) {
+      this[property] = properties[property];
+    }
+  }
+
+  this.name       = this.name       || '';
+  this.recordType = this.recordType || DNSCodes.RECORD_TYPES.ANY;
+  this.classCode  = this.classCode  || DNSCodes.CLASS_CODES.IN;
 }
 
+DNSRecord.parseFromPacketReader = function(reader) {
+  var name       = DNSUtils.byteArrayReaderToLabel(reader);
+  var recordType = reader.getValue(2);
+  var classCode  = reader.getValue(2);
+
+  return new this({
+    name: DNSUtils.decompressLabel(name, reader.byteArray),
+    recordType: recordType,
+    classCode: classCode
+  });
+};
+
 DNSRecord.prototype.constructor = DNSRecord;
+
+DNSRecord.prototype.serialize = function() {
+  var byteArray = new ByteArray();
+  
+  // Write `name` (ends with trailing 0x00 byte)
+  byteArray.append(DNSUtils.labelToByteArray(this.name));
+  byteArray.push(0x00);
+  
+  // Write `recordType` (2 bytes)
+  byteArray.push(this.recordType, 2);
+
+  // Write `classCode` (2 bytes)
+  byteArray.push(this.classCode, 2);
+
+  return byteArray;
+};
 
 return DNSRecord;
 
 })();
 
-},{"./dns-codes":3}],7:[function(require,module,exports){
+},{"./byte-array":2,"./dns-codes":3,"./dns-utils":8}],6:[function(require,module,exports){
 /*jshint esnext:true*/
 /*exported DNSResourceRecord*/
 'use strict';
@@ -663,37 +672,143 @@ var DNSRecord   = require('./dns-record');
 var DNSCodes    = require('./dns-codes');
 var DNSUtils    = require('./dns-utils');
 
+var ByteArray   = require('./byte-array');
+
 const DNS_RESOURCE_RECORD_DEFAULT_TTL = 10; // 10 seconds
 // const DNS_RESOURCE_RECORD_DEFAULT_TTL = 3600; // 1 hour
 
-function DNSResourceRecord(name, recordType, classCode, ttl, data) {
-  this.name = name;
-  this.recordType = recordType;
-  this.classCode = classCode || DNSCodes.CLASS_CODES.IN;
-  this.ttl = ttl || DNS_RESOURCE_RECORD_DEFAULT_TTL;
-  this.data = data;
+function DNSResourceRecord(properties) {
+  DNSRecord.call(this, properties);
+
+  this.ttl  = this.ttl  || DNS_RESOURCE_RECORD_DEFAULT_TTL;
+  this.data = this.data || null;
+}
+
+DNSResourceRecord.parseFromPacketReader = function(reader) {
+  var record = DNSRecord.parseFromPacketReader.call(this, reader);
+
+  var ttl  = reader.getValue(4);
+  var data = reader.getBytes(reader.getValue(2));
+
+  switch (record.recordType) {
+    case DNSCodes.RECORD_TYPES.PTR:
+      data = parsePTR(data, reader.byteArray);
+      break;
+    case DNSCodes.RECORD_TYPES.TXT:
+      data = parseTXT(data, reader.byteArray);
+      break;
+    default:
+      // data = BinaryUtils.arrayBufferToString(data.buffer);
+      break;
+  }
+
+  record.ttl  = ttl;
+  record.data = data;
+
+  return record;
 }
 
 DNSResourceRecord.prototype = Object.create(DNSRecord.prototype);
 
 DNSResourceRecord.prototype.constructor = DNSResourceRecord;
 
-DNSResourceRecord.prototype.getName = function() {
-  return DNSUtils.byteArrayToName(new ByteArray(this.data));
+DNSResourceRecord.prototype.serialize = function() {
+  var byteArray = DNSRecord.prototype.serialize.call(this);
+
+  // Write `ttl` (4 bytes)
+  byteArray.push(this.ttl, 4);
+
+  var data = this.data;
+
+  switch (this.recordType) {
+    case DNSCodes.RECORD_TYPES.PTR:
+      data = serializePTR(data);
+      break;
+    case DNSCodes.RECORD_TYPES.TXT:
+      data = serializeTXT(data);
+      break;
+    default:
+      data = new ByteArray(data);
+      break;
+  }
+
+  // Write `data` length plus one (2 bytes)
+  byteArray.push(data.length + 1, 2);
+
+  // Write `data` (ends with trailing 0x00 byte)
+  byteArray.append(data);
+  byteArray.push(0x00);
+
+  return byteArray;
 };
+
+function parsePTR(data, packetData) {
+  var result = DNSUtils.byteArrayToLabel(data);
+
+  return DNSUtils.decompressLabel(result, packetData);
+}
+
+function parseTXT(data, packetData) {
+  var result = {};
+
+  var reader = data.getReader();
+  var parts = [];
+
+  var partLength;
+
+  while ((partLength = reader.getValue())) {
+    // If a length has been specified instead of a pointer,
+    // read the string of the specified length.
+    if (partLength !== 0xc0) {
+      parts.push(reader.getString(partLength));
+      continue;
+    }
+
+    // TODO: Handle case where we have a pointer to the label
+    parts.push(String.fromCharCode(0xc0) + reader.getString());
+    break;
+  }
+
+  parts.forEach((part) => {
+    var pair = DNSUtils.decompressLabel(part, packetData).split('=');
+    var name = pair.shift();
+    var value = pair.join('=');
+
+    result[name] = value;
+  });
+
+  return result;
+}
+
+function serializePTR(data) {
+  var result = DNSUtils.labelToByteArray(data);
+
+  return result;
+}
+
+function serializeTXT(data) {
+  var result = new ByteArray();
+
+  for (var name in data) {
+    result.push(name.length + data[name].length + 1);
+    result.append(BinaryUtils.stringToArrayBuffer(name + '=' + data[name]));
+  }
+
+  return result;
+}
 
 return DNSResourceRecord;
 
 })();
 
-},{"./dns-codes":3,"./dns-record":6,"./dns-utils":9}],8:[function(require,module,exports){
+},{"./byte-array":2,"./dns-codes":3,"./dns-record":5,"./dns-utils":8}],7:[function(require,module,exports){
 /*jshint esnext:true*/
 /*exported DNSSD*/
 'use strict';
 
 module.exports = window.DNSSD = (function() {
 
-var DNSQuestionRecord = require('./dns-question-record');
+var DNSRecord         = require('./dns-record');
 var DNSResourceRecord = require('./dns-resource-record');
 var DNSPacket         = require('./dns-packet');
 var DNSCodes          = require('./dns-codes');
@@ -722,7 +837,7 @@ DNSSD.getSocket = function() {
       });
 
       this.socket.onmessage = (message) => {
-        var packet = new DNSPacket(message.data);
+        var packet = new DNSPacket(new ByteArray(message.data));
 
         switch (packet.flags.QR) {
           case DNSCodes.QUERY_RESPONSE_CODES.QUERY:
@@ -801,7 +916,7 @@ function handleResponsePacket(packet, message) {
   var services = [];
   packet.getRecords('AN').forEach((record) => {
     if (record.recordType === DNSCodes.RECORD_TYPES.PTR) {
-      services.push(record.getName());
+      services.push(record.data);
     }
   });
 
@@ -818,7 +933,11 @@ function discover() {
 
   packet.flags.QR = DNSCodes.QUERY_RESPONSE_CODES.QUERY;
 
-  var question = new DNSQuestionRecord(DNSSD_SERVICE_NAME, DNSCodes.RECORD_TYPES.PTR);
+  var question = new DNSRecord({
+    name: DNSSD_SERVICE_NAME,
+    recordType: DNSCodes.RECORD_TYPES.PTR
+  });
+
   packet.addRecord('QD', question);
 
   this.getSocket().then((socket) => {
@@ -861,34 +980,51 @@ function addServiceToPacket(serviceName, packet) {
   var alias = serviceName;
 
   // SRV Record
-  // var srv = new DNSResourceRecord(alias, DNSCodes.RECORD_TYPES.SRV);
   // var srvData = new ByteArray();
   // srvData.push(0x0000, 2);        // Priority
   // srvData.push(0x0000, 2);        // Weight
   // srvData.push(service.port, 2);  // Port
-  // srvData.append(DNSUtils.nameToByteArray(serviceName));
-  // srv.data = srvData;
+  // srvData.append(DNSUtils.labelToByteArray(serviceName));
+
+  // var srv = new DNSResourceRecord({
+  //   name: alias,
+  //   recordType: DNSCodes.RECORD_TYPES.SR,
+  //   data: srvData
+  // });
+
   // packet.addRecord('AR', srv);
 
   // TXT Record
-  // var txt = new DNSResourceRecord(alias, DNSCodes.RECORD_TYPES.TXT);
   // var txtData = new ByteArray();
 
   // for (var key in service.options) {
-  //   txtData.append(DNSUtils.nameToByteArray(key + '=' + service.options[key]));
+  //   txtData.append(DNSUtils.labelToByteArray(key + '=' + service.options[key]));
   // }
+  
+  // var txt = new DNSResourceRecord({
+  //   name: alias,
+  //   recordType: DNSCodes.RECORD_TYPES.TXT,
+  //   data: txtData
+  // });
 
-  // txt.data = txtData;
   // packet.addRecord('AR', txt);
 
   // PTR Wildcard Record
-  var ptrWildcard = new DNSResourceRecord(DNSSD_SERVICE_NAME, DNSCodes.RECORD_TYPES.PTR);
-  ptrWildcard.data = DNSUtils.nameToByteArray(serviceName);
+  var ptrWildcard = new DNSResourceRecord({
+    name: DNSSD_SERVICE_NAME,
+    recordType: DNSCodes.RECORD_TYPES.PTR,
+    data: serviceName
+  });
+
   packet.addRecord('AN', ptrWildcard);
 
   // PTR Service Record
-  var ptrService = new DNSResourceRecord(serviceName, DNSCodes.RECORD_TYPES.PTR);
-  ptrService.data = DNSUtils.nameToByteArray(alias);
+  var ptrService = new DNSResourceRecord({
+    name: serviceName,
+    recordType: DNSCodes.RECORD_TYPES.PTR,
+    data: alias
+  });
+
   packet.addRecord('AN', ptrService);
 }
 
@@ -896,7 +1032,7 @@ return DNSSD;
 
 })();
 
-},{"./binary-utils":1,"./byte-array":2,"./dns-codes":3,"./dns-packet":4,"./dns-question-record":5,"./dns-resource-record":7,"./dns-utils":9,"./event-target":10,"./ip-utils":11}],9:[function(require,module,exports){
+},{"./binary-utils":1,"./byte-array":2,"./dns-codes":3,"./dns-packet":4,"./dns-record":5,"./dns-resource-record":6,"./dns-utils":8,"./event-target":9,"./ip-utils":10}],8:[function(require,module,exports){
 /*jshint esnext:true*/
 /*exported DNSUtils*/
 'use strict';
@@ -904,41 +1040,51 @@ return DNSSD;
 module.exports = window.DNSUtils = (function() {
 
 var ByteArray   = require('./byte-array');
-var BinaryUtils = require('./binary-utils');
 
 var DNSUtils = {
-  byteArrayToName: function(byteArrayOrReader) {
-    var byteArray;
-    var reader;
+  decompressLabel: function(label, byteArray) {
+    var result = '';
 
-    if (byteArrayOrReader instanceof ByteArray) {
-      byteArray = byteArrayOrReader;
-      reader = byteArray.getReader();
-    }
-
-    else {
-      reader = byteArrayOrReader;
-      byteArray = reader.byteArray;
-    }
-
-    var parts = [];
-    var partLength;
-    while (partLength = reader.getValue()) {
-      // TODO: Handle case where we have a pointer to the name
-      if (partLength === 0xc0) {
-        reader.getValue();
-        break;
+    for (var i = 0, length = label.length; i < length; i++) {
+      if (label.charCodeAt(i) !== 0xc0) {
+        result += label.charAt(i);
+        continue;
       }
 
-      parts.push(BinaryUtils.arrayBufferToString(reader.getBytes(partLength)));
+      i++;
+      result += this.decompressLabel(this.byteArrayToLabel(byteArray, label.charCodeAt(i)), byteArray);
+    }
+
+    return result;
+  },
+
+  byteArrayReaderToLabel: function(byteArrayReader) {
+    var parts = [];
+    var partLength;
+
+    while ((partLength = byteArrayReader.getValue())) {
+      // If a length has been specified instead of a pointer,
+      // read the string of the specified length.
+      if (partLength !== 0xc0) {
+        parts.push(byteArrayReader.getString(partLength));
+        continue;
+      }
+
+      // TODO: Handle case where we have a pointer to the label
+      parts.push(String.fromCharCode(0xc0) + byteArrayReader.getString());
+      break;
     }
 
     return parts.join('.');
   },
 
-  nameToByteArray: function(name) {
+  byteArrayToLabel: function(byteArray, startByte) {
+    return this.byteArrayReaderToLabel(byteArray.getReader(startByte));
+  },
+
+  labelToByteArray: function(label) {
     var byteArray = new ByteArray();
-    var parts = name.split('.');
+    var parts = label.split('.');
     parts.forEach((part) => {
       var length = part.length;
       byteArray.push(length);
@@ -947,8 +1093,6 @@ var DNSUtils = {
         byteArray.push(part.charCodeAt(i));
       }
     });
-
-    byteArray.push(0x00);
 
     return byteArray;
   },
@@ -1003,14 +1147,13 @@ var DNSUtils = {
 
     return value;
   }
-
 };
 
 return DNSUtils;
 
 })();
 
-},{"./binary-utils":1,"./byte-array":2}],10:[function(require,module,exports){
+},{"./byte-array":2}],9:[function(require,module,exports){
 /*jshint esnext:true*/
 /*exported EventTarget*/
 'use strict';
@@ -1062,7 +1205,7 @@ return EventTarget;
 
 })();
 
-},{}],11:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 /*jshint esnext:true*/
 /*exported IPUtils*/
 'use strict';
@@ -1131,5 +1274,5 @@ return IPUtils;
 
 })();
 
-},{}]},{},[8])(8)
+},{}]},{},[7])(7)
 });

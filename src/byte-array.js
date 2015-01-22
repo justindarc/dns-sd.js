@@ -4,7 +4,13 @@
 
 module.exports = window.ByteArray = (function() {
 
+var BinaryUtils = require('./binary-utils');
+
 function ByteArray(maxBytesOrData) {
+  if (maxBytesOrData instanceof ByteArray) {
+    maxBytesOrData = maxBytesOrData.buffer;
+  }
+
   if (maxBytesOrData instanceof Uint8Array ||
       maxBytesOrData instanceof ArrayBuffer) {
     this._data = new Uint8Array(maxBytesOrData);
@@ -20,7 +26,7 @@ function ByteArray(maxBytesOrData) {
 
 ByteArray.prototype.constructor = ByteArray;
 
-Object.defineProperty(ByteArray.prototype, 'byteLength', {
+Object.defineProperty(ByteArray.prototype, 'length', {
   get: function() {
     return this._cursor;
   }
@@ -32,68 +38,79 @@ Object.defineProperty(ByteArray.prototype, 'buffer', {
   }
 });
 
-ByteArray.prototype.push = function(value, byteLength) {
-  byteLength = byteLength || 1;
+ByteArray.prototype.push = function(value, length) {
+  length = length || 1;
 
-  this.append(valueToUint8Array(value, byteLength));
+  this.append(valueToUint8Array(value, length));
 };
 
-ByteArray.prototype.append = function(bytes) {
-  if (bytes instanceof ByteArray) {
-    bytes = bytes.buffer;
+ByteArray.prototype.append = function(data) {
+  // Get `data` as a `Uint8Array`
+  if (data instanceof ByteArray) {
+    data = data.buffer;
   }
 
-  if (bytes instanceof ArrayBuffer) {
-    bytes = new Uint8Array(bytes);
+  if (data instanceof ArrayBuffer) {
+    data = new Uint8Array(data);
   }
 
-  for (var i = 0, byteLength = bytes.length; i < byteLength; i++) {
-    this._data[this._cursor] = bytes[i];
+  for (var i = 0, length = data.length; i < length; i++) {
+    this._data[this._cursor] = data[i];
     this._cursor++;
   }
 };
 
 ByteArray.prototype.getReader = function(startByte) {
-  var cursor = startByte || 0;
+  return new ByteArrayReader(this, startByte);
+};
 
-  var getBytes = (byteLength) => {
-    if (byteLength === null) {
-      return new Uint8Array();
-    }
+function ByteArrayReader(byteArray, startByte) {
+  this.byteArray = byteArray;
+  this.cursor = startByte || 0;
+}
 
-    byteLength = byteLength || 1;
+ByteArrayReader.prototype.constructor = ByteArrayReader;
 
-    var endPointer = cursor + byteLength;
-    if (endPointer > this.byteLength) {
-      return new Uint8Array();
-    }
+Object.defineProperty(ByteArrayReader.prototype, 'eof', {
+  get: function() {
+    return this.cursor >= this.byteArray.length;
+  }
+});
 
-    var uint8Array = new Uint8Array(this._buffer.slice(cursor, endPointer));
-    cursor += byteLength;
+ByteArrayReader.prototype.getBytes = function(length) {
+  if (length === null || length === 0) {
+    return new Uint8Array();
+  }
 
-    return uint8Array;
-  };
+  length = length || 1;
 
-  var getValue = (byteLength) => {
-    var bytes = getBytes(byteLength);
-    if (bytes.length === 0) {
-      return null;
-    }
+  var end = this.cursor + length;
+  if (end > this.byteArray.length) {
+    return new Uint8Array();
+  }
 
-    return uint8ArrayToValue(bytes);
-  };
+  var uint8Array = new Uint8Array(this.byteArray._buffer.slice(this.cursor, end));
+  this.cursor += length;
 
-  var isEOF = () => {
-    return cursor >= this.byteLength;
-  };
+  return new ByteArray(uint8Array);
+};
 
-  return {
-    getBytes:  getBytes,
-    getValue:  getValue,
-    isEOF:     isEOF,
+ByteArrayReader.prototype.getString = function(length) {
+  var byteArray = this.getBytes(length);
+  if (byteArray.length === 0) {
+    return '';
+  }
 
-    byteArray: this
-  };
+  return BinaryUtils.arrayBufferToString(byteArray.buffer);
+};
+
+ByteArrayReader.prototype.getValue = function(length) {
+  var byteArray = this.getBytes(length);
+  if (byteArray.length === 0) {
+    return null;
+  }
+
+  return uint8ArrayToValue(new Uint8Array(byteArray.buffer));
 };
 
 /**
@@ -111,10 +128,10 @@ ByteArray.prototype.getReader = function(startByte) {
  *  Offset     0        255       65535    16777215
  *  Total    255      65535    16777215  4294967295
  */
-function valueToUint8Array(value, byteLength) {
-  var arrayBuffer = new ArrayBuffer(byteLength);
+function valueToUint8Array(value, length) {
+  var arrayBuffer = new ArrayBuffer(length);
   var uint8Array = new Uint8Array(arrayBuffer);
-  for (var i = byteLength - 1; i >= 0; i--) {
+  for (var i = length - 1; i >= 0; i--) {
     uint8Array[i] = value & 0xff;
     value = value >> 8;
   }
@@ -123,13 +140,13 @@ function valueToUint8Array(value, byteLength) {
 }
 
 function uint8ArrayToValue(uint8Array) {
-  var byteLength = uint8Array.length;
-  if (byteLength === 0) {
+  var length = uint8Array.length;
+  if (length === 0) {
     return null;
   }
 
   var value = 0;
-  for (var i = 0; i < byteLength; i++) {
+  for (var i = 0; i < length; i++) {
     value = value << 8;
     value += uint8Array[i];
   }

@@ -40,7 +40,7 @@ var BinaryUtils = {
   },
 
   mergeArrayBuffers: function(arrayBuffers, callback) {
-    return BinaryUtils.blobToArrayBuffer(new Blob(arrayBuffers), callback);
+    return this.blobToArrayBuffer(new Blob(arrayBuffers), callback);
   }
 };
 

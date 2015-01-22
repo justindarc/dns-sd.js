@@ -43,6 +43,8 @@ window.addEventListener('load', function() {
       evt.request.body.message +
     '</p>';
     conversation.scrollTop = conversation.scrollHeight;
+
+    evt.response.send();
   });
 
   DNSSD.addEventListener('discovered', function(evt) {
