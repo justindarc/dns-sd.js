@@ -24,4 +24,11 @@ button {
 ul:before {
   content: attr(data-address);
   font-size: 1.2rem;
+  font-weight: bold;
+}
+
+ul {
+  padding: 0;
+  margin: 0 0 0.5rem 0;
+  list-style-position: inside;
 }
