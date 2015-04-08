@@ -45,14 +45,12 @@ TODO: how to actually use the library.
 
 ## Examples
 
-Each example app is in its own folder, and it is a completely functional app that you can open in WebIDE and deploy to your device.
-
-Since this is about connecting various devices over the air, you will need two or more devices running the same app in order to actually see what it is about.
+Each example app is in its own folder, and it is a completely functional app that you can open in [WebIDE](https://developer.mozilla.org/en-US/docs/Tools/WebIDE) and deploy to your device.
 
 ### Browser (`example/browser`)
 
-TODO
+This example will start service discovery on the `DNSSD` object, then display the discovered services per host on the screen.
 
 ### Chat (`example/chat`)
 
-TODO
+Since this is about connecting various devices over the air, you will need two or more devices running the same app in order to actually see what it is about.
