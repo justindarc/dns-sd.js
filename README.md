@@ -41,7 +41,7 @@ TODO: test to see if this works.
 
 ### In practice
 
-This library requires that your app has access to TCP and UDP sockets, so you need to specify these in the permissions field in your manifest.app file:
+This library requires that your app has access to TCP and UDP sockets, so you need to specify these in the `permissions` field in your `manifest.webapp` file:
 
 ```javascript
 {
