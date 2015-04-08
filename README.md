@@ -41,7 +41,39 @@ TODO: test to see if this works.
 
 ### In practice
 
-TODO: how to actually use the library.
+This library requires that your app has access to TCP and UDP sockets, so you need to specify these in the permissions field in your manifest.app file:
+
+```javascript
+{
+  "tcp-socket": {},
+  "udp-socket": {}
+}
+```
+
+#### Registering a service
+
+```javascript
+DNSSD.registerService('_your_service_name._tcp.local', port_number, {});
+```
+
+Service names must end in `.local`.
+
+#### Discovering services
+
+```javascript
+DNSSD.addEventListener('discovered', function(evt) {
+  // A service broadcast event was received
+  // i.e. we "discovered" something new
+});
+
+DNSSD.startDiscovery();
+```
+
+where `evt` is a discoveredEvent which contains some bits of interesting information:
+
+
+* `address` – the address of the host which is exposing services
+* `services` – an array with the names of the services in the host
 
 ## Examples
 
