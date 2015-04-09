@@ -41,7 +41,15 @@ TODO: test to see if this works.
 
 ### In practice
 
-This library requires that your app has access to TCP and UDP sockets, so you need to specify these in the `permissions` field in your `manifest.webapp` file:
+This library requires that your app has access to UDP sockets, so you need to specify this in the `permissions` field in your `manifest.webapp` file:
+
+```javascript
+{
+  "udp-socket": {}
+}
+```
+
+More often than not, you will also want to use TCP sockets for connecting to the discovered services, so you need to specify the TCP socket permission too if your app wants to establish TCP connections too. The permissions would look like this: 
 
 ```javascript
 {
@@ -49,7 +57,6 @@ This library requires that your app has access to TCP and UDP sockets, so you ne
   "udp-socket": {}
 }
 ```
-
 #### Registering a service
 
 ```javascript
